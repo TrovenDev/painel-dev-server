@@ -1,6 +1,6 @@
 # node-pty precisa compilar um binding nativo — usa a imagem completa (não
 # alpine/musl) com as ferramentas de build instaladas.
-FROM node:20-bookworm
+FROM node:22-bookworm
 
 WORKDIR /app
 
