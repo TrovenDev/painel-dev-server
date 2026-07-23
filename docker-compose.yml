@@ -1,0 +1,26 @@
+services:
+  painel-dev-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: painel-dev-server
+    volumes:
+      - /root/dev-projetos:/workspace
+    environment:
+      - WORKSPACE_PATH=/workspace
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - PORT=3001
+    ports:
+      - "3001"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2G
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    driver: bridge
