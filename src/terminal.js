@@ -1,15 +1,26 @@
 import pty from 'node-pty'
-import path from 'path'
+import fs from 'fs/promises'
+import { resolveProjectRoot } from './workspace.js'
 
-const WORKSPACE_PATH = path.resolve(process.env.WORKSPACE_PATH || process.cwd())
 const SHELL_CMD = process.env.SHELL_CMD || (process.platform === 'win32' ? 'powershell.exe' : 'bash')
 
-export function handleTerminalConnection(ws) {
+export async function handleTerminalConnection(ws, { projectName }) {
+  let projectPath
+  try {
+    projectPath = resolveProjectRoot(projectName)
+    const stat = await fs.stat(projectPath)
+    if (!stat.isDirectory()) throw new Error('Projeto inválido.')
+  } catch {
+    ws.send(JSON.stringify({ type: 'error', message: 'Projeto inválido ou inexistente.' }))
+    ws.close()
+    return
+  }
+
   const shell = pty.spawn(SHELL_CMD, [], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
-    cwd: WORKSPACE_PATH,
+    cwd: projectPath,
     env: process.env,
   })
 

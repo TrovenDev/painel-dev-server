@@ -1,11 +1,12 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import path from 'path'
+import fs from 'fs/promises'
 import { supabaseAdmin } from './supabaseAdmin.js'
+import { resolveProjectRoot } from './workspace.js'
 
-const WORKSPACE_PATH = path.resolve(process.env.WORKSPACE_PATH || process.cwd())
-
-async function saveMessage(sessionId, remetente, conteudo) {
-  await supabaseAdmin.from('painel_dev_mensagens').insert({ sessao: sessionId, remetente, conteudo })
+async function saveMessage(sessionId, projectName, remetente, conteudo) {
+  await supabaseAdmin
+    .from('painel_dev_mensagens')
+    .insert({ sessao: sessionId, project_name: projectName, remetente, conteudo })
 }
 
 // Fila simples que alimenta o generator consumido pelo SDK: cada prompt que
@@ -41,7 +42,18 @@ function createPromptQueue() {
   return { push, generator, stop: () => push(null) }
 }
 
-export function handleChatConnection(ws, { sessionId }) {
+export async function handleChatConnection(ws, { sessionId, projectName }) {
+  let projectPath
+  try {
+    projectPath = resolveProjectRoot(projectName)
+    const stat = await fs.stat(projectPath)
+    if (!stat.isDirectory()) throw new Error('Projeto inválido.')
+  } catch {
+    ws.send(JSON.stringify({ type: 'error', message: 'Projeto inválido ou inexistente.' }))
+    ws.close()
+    return
+  }
+
   const queue = createPromptQueue()
   let started = false
 
@@ -50,7 +62,7 @@ export function handleChatConnection(ws, { sessionId }) {
     const stream = query({
       prompt: queue.generator(),
       options: {
-        cwd: WORKSPACE_PATH,
+        cwd: projectPath,
         permissionMode: 'acceptEdits',
       },
     })
@@ -63,7 +75,7 @@ export function handleChatConnection(ws, { sessionId }) {
           .join('')
         if (text) {
           ws.send(JSON.stringify({ type: 'assistant_message', text }))
-          await saveMessage(sessionId, 'assistant', text)
+          await saveMessage(sessionId, projectName, 'assistant', text)
         }
       } else if (message.type === 'result') {
         ws.send(JSON.stringify({ type: 'turn_done' }))
@@ -80,7 +92,7 @@ export function handleChatConnection(ws, { sessionId }) {
     }
     if (msg.type !== 'prompt' || !msg.text) return
 
-    await saveMessage(sessionId, 'user', msg.text)
+    await saveMessage(sessionId, projectName, 'user', msg.text)
     queue.push(msg.text)
 
     if (!started) {

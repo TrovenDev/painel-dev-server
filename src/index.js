@@ -4,6 +4,8 @@ import express from 'express'
 import cors from 'cors'
 import { WebSocketServer } from 'ws'
 import { filesRouter } from './files.js'
+import { projectsRouter } from './projects.js'
+import { chatRouter } from './chatRouter.js'
 import { verifyToken } from './auth.js'
 import { handleTerminalConnection } from './terminal.js'
 import { handleChatConnection } from './chat.js'
@@ -17,13 +19,15 @@ app.use(express.json())
 
 // Toda rota exige o token de sessão do Supabase (mesmo login do Sistema
 // Troven) — o painel-dev não tem autenticação própria.
-app.use('/api/files', async (req, res, next) => {
+async function requireAuth(req, res, next) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
   const user = await verifyToken(token)
   if (!user) return res.status(401).json({ error: 'Não autenticado.' })
   next()
-})
-app.use('/api/files', filesRouter)
+}
+app.use('/api/files', requireAuth, filesRouter)
+app.use('/api/projects', requireAuth, projectsRouter)
+app.use('/api/chat', requireAuth, chatRouter)
 
 const server = http.createServer(app)
 
@@ -40,21 +44,28 @@ server.on('upgrade', async (req, socket, head) => {
     return
   }
 
+  const projectName = url.searchParams.get('project')
+  if (!projectName) {
+    socket.write('HTTP/1.1 400 Bad Request\r\n\r\n')
+    socket.destroy()
+    return
+  }
+
   if (url.pathname === '/ws/terminal') {
-    terminalWss.handleUpgrade(req, socket, head, (ws) => terminalWss.emit('connection', ws, req))
+    terminalWss.handleUpgrade(req, socket, head, (ws) => terminalWss.emit('connection', ws, req, { projectName }))
   } else if (url.pathname === '/ws/chat') {
-    chatWss.handleUpgrade(req, socket, head, (ws) => chatWss.emit('connection', ws, req))
+    chatWss.handleUpgrade(req, socket, head, (ws) => chatWss.emit('connection', ws, req, { projectName }))
   } else {
     socket.destroy()
   }
 })
 
-terminalWss.on('connection', (ws) => handleTerminalConnection(ws))
+terminalWss.on('connection', (ws, req, { projectName }) => handleTerminalConnection(ws, { projectName }))
 
-chatWss.on('connection', (ws, req) => {
+chatWss.on('connection', (ws, req, { projectName }) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   const sessionId = url.searchParams.get('session') || 'default'
-  handleChatConnection(ws, { sessionId })
+  handleChatConnection(ws, { sessionId, projectName })
 })
 
 server.listen(PORT, () => {
