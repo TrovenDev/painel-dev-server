@@ -6,6 +6,9 @@ services:
     container_name: painel-dev-server
     volumes:
       - /root/dev-projetos:/workspace
+      # Sessões do Claude Code (~/.claude/projects) — sem isso, /api/usage
+      # perde todo o histórico a cada redeploy do container.
+      - /root/dev-projetos-claude-home:/root/.claude
     environment:
       - WORKSPACE_PATH=/workspace
       - SUPABASE_URL=${SUPABASE_URL}

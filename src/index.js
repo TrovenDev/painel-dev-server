@@ -6,6 +6,7 @@ import { WebSocketServer } from 'ws'
 import { filesRouter } from './files.js'
 import { projectsRouter } from './projects.js'
 import { chatRouter } from './chatRouter.js'
+import { usageRouter } from './usageRouter.js'
 import { verifyToken } from './auth.js'
 import { handleTerminalConnection } from './terminal.js'
 import { handleChatConnection } from './chat.js'
@@ -28,6 +29,7 @@ async function requireAuth(req, res, next) {
 app.use('/api/files', requireAuth, filesRouter)
 app.use('/api/projects', requireAuth, projectsRouter)
 app.use('/api/chat', requireAuth, chatRouter)
+app.use('/api/usage', requireAuth, usageRouter)
 
 const server = http.createServer(app)
 
